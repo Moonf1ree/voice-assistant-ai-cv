@@ -10,6 +10,10 @@ const deepseek = new OpenAI({
 export async function POST(req: Request) {
   const { prompt } = await req.json();
 
+  if (!prompt) {
+    return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+  }
+
   try {
     const completion = await deepseek.chat.completions.create({
       model: "deepseek-chat",
@@ -21,18 +25,25 @@ export async function POST(req: Request) {
       max_tokens: 2000,
     });
 
-    return NextResponse.json({
-      message:
-        completion.choices[0]?.message?.content || "No response received",
-    });
+    const responseContent =
+      completion.choices[0]?.message?.content || "No response received";
+
+    return NextResponse.json({ message: responseContent });
   } catch (error) {
     console.error("DeepSeek error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to fetch response from DeepSeek",
-        details: error.message,
-      },
-      { status: 500 }
-    );
+
+    let errorMessage = "Failed to fetch response from DeepSeek";
+    let statusCode = 500;
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      if ("status" in error && error.status === 429) {
+        errorMessage = "Rate limit exceeded";
+        statusCode = 429;
+      }
+    }
+
+    return NextResponse.json({ error: errorMessage }, { status: statusCode });
   }
 }
